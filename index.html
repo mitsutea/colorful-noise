@@ -1,1064 +1,557 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#EEF1F2">
-<title>Colorful Noise</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#EEF1F2" />
+  <title>Colorful Noise</title>
+  <style>
+    :root {
+      --bg: #EEF1F2;
+      --text: #536168;
+      --muted: #7A878D;
+      --panel: rgba(255,255,255,.58);
+      --panel-border: rgba(255,255,255,.75);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color: var(--text); }
+    button { font: inherit; }
+    #app { position: fixed; inset: 0; overflow: hidden; background:
+      radial-gradient(circle at 20% 10%, rgba(255,255,255,.8), transparent 35%),
+      radial-gradient(circle at 85% 80%, rgba(211,226,230,.45), transparent 40%),
+      var(--bg); }
+    canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+    .screen { position: absolute; inset: 0; display: none; }
+    .screen.active { display: block; }
 
-<!--
-  Colorful Noise
-  ★ NFCタグには「このページを公開したURL(https://...)」を書き込む。
-  ★ このファイル1つだけで動作します(外部ライブラリ・サーバー・DBなし)。
--->
+    #setup { padding: max(28px, env(safe-area-inset-top)) 22px max(28px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; }
+    .eyebrow { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+    h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-weight: 500; font-size: clamp(42px, 12vw, 64px); letter-spacing: -.03em; color: #4C5A60; }
+    .desc { margin: 14px 0 0; max-width: 32rem; line-height: 1.8; font-size: 14px; color: #68767C; }
+    .section { margin-top: 28px; }
+    .section-label { font-size: 11px; letter-spacing: .12em; color: #879197; margin-bottom: 11px; }
+    .shape-row, .color-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .shape-btn, .color-btn { border: 1px solid rgba(132,145,151,.20); background: rgba(255,255,255,.48); box-shadow: 0 8px 24px rgba(74,88,94,.07); }
+    .shape-btn { width: 72px; height: 64px; border-radius: 18px; color: #5F6C71; display: grid; place-items: center; }
+    .shape-btn.selected, .color-btn.selected { outline: 2px solid rgba(95,109,115,.45); outline-offset: 2px; background: rgba(255,255,255,.8); }
+    .shape-glyph { width: 26px; height: 26px; display: block; background: currentColor; opacity: .7; }
+    .circle { border-radius: 50%; }
+    .triangle { clip-path: polygon(50% 0%, 100% 100%, 0% 100%); }
+    .square { border-radius: 4px; }
+    .color-btn { width: 38px; height: 38px; border-radius: 50%; padding: 0; }
+    .color-btn span { display: block; width: 100%; height: 100%; border-radius: 50%; }
+    #launchPanel { margin-top: auto; padding: 18px; border-radius: 24px; background: var(--panel); border: 1px solid var(--panel-border); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 16px 42px rgba(67,80,86,.08); }
+    #launchPreview { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    #previewText { font-size: 13px; line-height: 1.5; color: #66747A; }
+    #previewShape { width: 52px; height: 52px; flex: 0 0 auto; background: #F3C8D8; opacity: .6; box-shadow: 0 0 0 1px rgba(255,255,255,.35) inset, 0 8px 20px rgba(80,90,95,.10); }
+    #sensorBtn, #continueBtn, #restartBtn { margin-top: 14px; width: 100%; min-height: 50px; border: 0; border-radius: 16px; background: rgba(77,92,98,.92); color: #fff; letter-spacing: .03em; }
+    #continueBtn:disabled { opacity: .42; }
+    #hint { margin-top: 12px; font-size: 12px; line-height: 1.6; color: #7C888D; text-align: center; }
 
-<style>
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    #space { touch-action: none; }
+    #spaceUI { position: absolute; inset: 0; pointer-events: none; }
+    #titleMini { position: absolute; left: 18px; top: max(18px, env(safe-area-inset-top)); font-family: Georgia, serif; font-size: 20px; color: rgba(73,87,93,.72); }
+    #modeHint { position: absolute; left: 18px; right: 18px; bottom: max(22px, env(safe-area-inset-bottom)); text-align: center; padding: 11px 14px; border-radius: 999px; background: rgba(255,255,255,.48); border: 1px solid rgba(255,255,255,.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); color: rgba(78,92,98,.74); font-size: 12px; transition: opacity .8s ease; }
+    #modeHint.hidden { opacity: 0; }
+    #resetButton { position: absolute; right: 16px; top: max(16px, env(safe-area-inset-top)); border: 0; border-radius: 999px; padding: 8px 12px; background: rgba(255,255,255,.36); color: rgba(82,94,100,.65); pointer-events: auto; font-size: 11px; }
+    #count { position: absolute; right: 18px; bottom: max(72px, calc(env(safe-area-inset-bottom) + 62px)); font-size: 11px; letter-spacing: .08em; color: rgba(83,96,102,.5); }
+    #addMoreButton { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(22px, calc(env(safe-area-inset-bottom) + 16px)); border: 1px solid rgba(255,255,255,.72); border-radius: 999px; padding: 11px 16px; background: rgba(255,255,255,.52); color: rgba(78,92,98,.78); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 12px; pointer-events: auto; box-shadow: 0 10px 24px rgba(74,88,94,.08); }
 
-  html, body {
-    margin: 0;
-    height: 100%;
-    overflow: hidden;
-    background: #EEF1F2;
-    color: #5b6570;
-    overscroll-behavior: none;
-    -webkit-user-select: none;
-    user-select: none;
-    -webkit-touch-callout: none;
-    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
-  }
-  body { position: fixed; inset: 0; width: 100%; }
+    #permissionOverlay[hidden] { display: none !important; }
+    #permissionOverlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(238,241,242,.62); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); z-index: 20; }
+    #permissionCard { width: min(92vw, 420px); padding: 24px; border-radius: 24px; background: rgba(255,255,255,.77); border: 1px solid rgba(255,255,255,.88); box-shadow: 0 24px 60px rgba(66,78,84,.12); text-align: center; }
+    #permissionCard h2 { margin: 0 0 8px; font-family: Georgia, serif; font-weight: 500; font-size: 28px; color: #4D5B61; }
+    #permissionCard p { margin: 0; color: #748087; line-height: 1.7; font-size: 13px; }
+    #permissionCard button { margin-top: 18px; width: 100%; min-height: 50px; border: 0; border-radius: 16px; background: #536168; color: #fff; }
 
-  /* Safe Area を JS から読むための見えない要素 */
-  #safe {
-    position: fixed; left: 0; top: 0;
-    visibility: hidden; pointer-events: none;
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  /* 作品空間 */
-  #stage {
-    position: fixed; inset: 0;
-    z-index: 1;
-    overflow: hidden;
-    touch-action: none;
-  }
-
-  /* ---------- ガラスのオブジェクト ---------- */
-  .obj {
-    position: absolute; left: 0; top: 0;
-    pointer-events: none;
-    will-change: transform;
-  }
-  .obj > div { position: absolute; inset: 0; }
-
-  .obj > .shadow { filter: blur(9px); }
-  .obj > .shadow > i {
-    position: absolute; inset: 0;
-    background: rgba(110, 122, 140, 0.26);
-    transform: scale(1.03);
-  }
-  .obj.demo > .shadow > i { background: rgba(110, 122, 140, 0.18); }
-
-  .obj > .glass {
-    overflow: hidden;
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
-  }
-  .obj > .glass::after {
-    content: "";
-    position: absolute; inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 55%);
-  }
-
-  .circle > .glass, .circle > .shadow > i { border-radius: 50%; }
-  .square > .glass, .square > .shadow > i { border-radius: 5px; }
-  .triangle > .glass, .triangle > .shadow > i { clip-path: polygon(50% 0%, 100% 100%, 0% 100%); }
-
-  .circle > .glass, .square > .glass {
-    box-shadow: inset 0 0 12px rgba(255,255,255,0.6), 0 0 0 0.5px rgba(255,255,255,0.35);
-  }
-
-  /* ---------- パネル(タイトル・選択) ---------- */
-  .panel {
-    position: fixed; inset: 0;
-    z-index: 5;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    text-align: center;
-    padding: calc(env(safe-area-inset-top) + 28px) 28px calc(env(safe-area-inset-bottom) + 28px);
-    background: rgba(238, 241, 242, 0.78);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.7s ease;
-    overflow-y: auto;
-  }
-  .panel.show { opacity: 1; pointer-events: auto; }
-
-  h1 {
-    margin: 0 0 18px;
-    font-weight: 300;
-    font-size: 34px;
-    letter-spacing: 0.14em;
-    color: #4f5a66;
-  }
-  .sub { margin: 0 0 30px; font-size: 14px; line-height: 1.9; letter-spacing: 0.08em; }
-  .note { margin: 0 0 26px; font-size: 12.5px; line-height: 1.9; letter-spacing: 0.06em; opacity: 0.85; }
-  .already { margin: 0 0 22px; font-size: 12px; letter-spacing: 0.06em; color: #7b8794; }
-  .status { height: 18px; margin: 14px 0 0; font-size: 12px; opacity: 0.8; }
-
-  .btn {
-    border: none;
-    padding: 14px 34px;
-    border-radius: 999px;
-    background: rgba(255,255,255,0.82);
-    color: #4f5a66;
-    font-size: 15px;
-    letter-spacing: 0.1em;
-    font-family: inherit;
-    box-shadow: 0 6px 20px rgba(110,122,140,0.16);
-    transition: opacity 0.4s ease, transform 0.2s ease;
-  }
-  .btn:active { transform: scale(0.97); }
-  .btn:disabled { opacity: 0.35; }
-  .linkbtn {
-    margin-top: 16px;
-    border: none; background: none;
-    font-size: 12px; letter-spacing: 0.08em;
-    color: #7b8794; font-family: inherit;
-    padding: 8px;
-  }
-
-  .label { margin: 0 0 12px; font-size: 12px; letter-spacing: 0.2em; opacity: 0.8; }
-  .cards { display: flex; gap: 14px; margin-bottom: 30px; }
-  .card {
-    width: 76px; height: 88px;
-    border: none; border-radius: 18px;
-    background: rgba(255,255,255,0.35);
-    display: flex; align-items: center; justify-content: center;
-    transition: background 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
-  }
-  .card.on {
-    background: rgba(255,255,255,0.88);
-    box-shadow: 0 6px 18px rgba(110,122,140,0.18);
-    transform: translateY(-2px);
-  }
-  .ico { width: 34px; height: 34px; background: var(--ico, rgba(168,178,190,0.7)); }
-  .ico.circle { border-radius: 50%; }
-  .ico.triangle { clip-path: polygon(50% 6%, 100% 94%, 0% 94%); }
-  .ico.square { width: 30px; height: 30px; border-radius: 4px; }
-
-  .swatches {
-    display: flex; flex-wrap: wrap; justify-content: center;
-    gap: 14px; max-width: 320px; margin-bottom: 34px;
-  }
-  .sw {
-    width: 38px; height: 38px;
-    border: none; border-radius: 50%;
-    background: var(--c);
-    box-shadow: 0 1px 4px rgba(110,122,140,0.22);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-  }
-  .sw.on {
-    transform: scale(1.18);
-    box-shadow: 0 0 0 3px rgba(255,255,255,0.95), 0 4px 12px rgba(110,122,140,0.25);
-  }
-
-  /* ---------- ヒント・トースト・RESET ---------- */
-  #hint {
-    position: fixed; left: 0; right: 0;
-    z-index: 3;
-    text-align: center;
-    font-size: 14px; letter-spacing: 0.16em; line-height: 1.8;
-    opacity: 0; pointer-events: none;
-    transition: opacity 0.8s ease;
-  }
-  #hint.show { opacity: 0.75; }
-
-  #toast {
-    position: fixed; left: 0; right: 0;
-    top: calc(env(safe-area-inset-top) + 18px);
-    z-index: 6;
-    text-align: center;
-    font-size: 12px; letter-spacing: 0.12em;
-    opacity: 0; pointer-events: none;
-    transition: opacity 1s ease;
-  }
-  #toast.show { opacity: 0.7; }
-
-  #reset {
-    position: fixed;
-    right: calc(env(safe-area-inset-right) + 8px);
-    bottom: calc(env(safe-area-inset-bottom) + 6px);
-    z-index: 20;
-    border: none; background: none;
-    padding: 8px;
-    font-size: 9px; letter-spacing: 0.18em;
-    color: #5b6570; opacity: 0.3;
-    font-family: inherit;
-  }
-
-  /* 横向きなど高さが小さいとき */
-  @media (max-height: 520px) {
-    h1 { font-size: 26px; margin-bottom: 8px; }
-    .sub { margin-bottom: 14px; }
-    .note { margin-bottom: 12px; }
-    .cards { margin-bottom: 14px; }
-    .card { height: 64px; }
-    .swatches { margin-bottom: 14px; max-width: 420px; }
-    .panel { justify-content: flex-start; }
-  }
-</style>
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+  </style>
 </head>
-
 <body>
+<div id="app">
+  <section id="setup" class="screen active">
+    <div class="eyebrow">NFC Interactive Instrument</div>
+    <h1>Colorful Noise</h1>
+    <p class="desc">ひとつの形と色を選んで、静かな空間へ投げ込んでください。形どうしが出会うと、それぞれの音が鳴ります。</p>
 
-<div id="safe"></div>
-<div id="stage"></div>
-<div id="hint">↑<br>上へスワイプして投げ込む</div>
-<div id="toast"></div>
+    <div class="section">
+      <div class="section-label">SHAPE</div>
+      <div class="shape-row">
+        <button class="shape-btn selected" data-shape="circle" aria-label="円"><span class="shape-glyph circle"></span></button>
+        <button class="shape-btn" data-shape="triangle" aria-label="三角形"><span class="shape-glyph triangle"></span></button>
+        <button class="shape-btn" data-shape="square" aria-label="四角形"><span class="shape-glyph square"></span></button>
+      </div>
+    </div>
 
-<!-- タイトル画面 -->
-<section class="panel" id="p-title">
-  <h1>Colorful Noise</h1>
-  <p class="sub">ひとつの形と色を選んで、<br>空間へ投げ込んでください。</p>
-  <p class="already" id="already" style="display:none">このブラウザではすでにオブジェクトを投げています</p>
-  <p class="note" id="sensorNote">スマートフォンの動きを作品に使います<br>センサーを許可してください</p>
-  <button class="btn" id="btnStart">センサーを許可する</button>
-  <button class="linkbtn" id="btnSkip">許可せずに始める</button>
-  <p class="status" id="status"></p>
-</section>
+    <div class="section">
+      <div class="section-label">COLOR</div>
+      <div class="color-row">
+        <button class="color-btn selected" data-color="#F3C8D8" aria-label="淡いピンク"><span style="background:#F3C8D8"></span></button>
+        <button class="color-btn" data-color="#F1E3A4" aria-label="淡い黄色"><span style="background:#F1E3A4"></span></button>
+        <button class="color-btn" data-color="#BFDFF0" aria-label="淡い水色"><span style="background:#BFDFF0"></span></button>
+        <button class="color-btn" data-color="#D9CBEF" aria-label="薄紫"><span style="background:#D9CBEF"></span></button>
+        <button class="color-btn" data-color="#F5F5F2" aria-label="白"><span style="background:#F5F5F2"></span></button>
+        <button class="color-btn" data-color="#D6D8DD" aria-label="淡いグレー"><span style="background:#D6D8DD"></span></button>
+        <button class="color-btn" data-color="#C9E8E4" aria-label="薄い青"><span style="background:#C9E8E4"></span></button>
+      </div>
+    </div>
 
-<!-- 形・色の選択画面 -->
-<section class="panel" id="p-select">
-  <p class="label">形</p>
-  <div class="cards" id="cards"></div>
-  <p class="label">色</p>
-  <div class="swatches" id="swatches"></div>
-  <button class="btn" id="btnReady" disabled>準備する</button>
-</section>
+    <div id="launchPanel">
+      <div id="launchPreview">
+        <div>
+          <div class="section-label">YOUR OBJECT</div>
+          <div id="previewText">円 / 淡いピンク</div>
+        </div>
+        <div id="previewShape" class="circle"></div>
+      </div>
+      <button id="sensorBtn">スマホを傾けて演奏する</button>
+      <button id="continueBtn" disabled>投げ込む準備をする</button>
+      <div id="hint">センサーを許可すると、傾きで重力を動かせます。振るとオブジェクトが少し弾みます。</div>
+    </div>
+  </section>
 
-<button id="reset">RESET</button>
+  <section id="space" class="screen">
+    <canvas id="world"></canvas>
+    <div id="spaceUI">
+      <div id="titleMini">Colorful Noise</div>
+      <button id="resetButton">RESET</button>
+      <div id="count">0 OBJECTS · 3 sound guides</div>
+      <button id="addMoreButton">もう一つ作る</button>
+      <div id="modeHint">画面下から上へスワイプして、オブジェクトを投げ込む</div>
+    </div>
+  </section>
 
+  <div id="permissionOverlay" hidden>
+    <div id="permissionCard">
+      <h2>Movement</h2>
+      <p>スマートフォンの傾きと動きを作品に使います。センサーへのアクセスを許可してください。</p>
+      <button id="grantPermission">センサーを許可する</button><button id="skipPermission" style="margin-top:10px;background:transparent;color:#68767C;border:0;min-height:42px;">センサーなしで続ける</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"></script>
 <script>
 (() => {
-  'use strict';
+  const { Engine, World, Bodies, Body, Events, Vector } = Matter;
+  const setup = document.getElementById('setup');
+  const space = document.getElementById('space');
+  const canvas = document.getElementById('world');
+  const ctx = canvas.getContext('2d');
+  const sensorBtn = document.getElementById('sensorBtn');
+  const continueBtn = document.getElementById('continueBtn');
+  const permissionOverlay = document.getElementById('permissionOverlay');
+  const grantPermission = document.getElementById('grantPermission');
+  const skipPermission = document.getElementById('skipPermission');
+  const previewText = document.getElementById('previewText');
+  const previewShape = document.getElementById('previewShape');
+  const modeHint = document.getElementById('modeHint');
+  const count = document.getElementById('count');
+  const resetButton = document.getElementById('resetButton');
+  const addMoreButton = document.getElementById('addMoreButton');
 
-  /* =========================================================
-     設定
-  ========================================================= */
-  const COLORS = [
-    { name: '淡いピンク', hex: '#F3C8D8' },
-    { name: '淡い黄色',   hex: '#F1E3A4' },
-    { name: '淡い水色',   hex: '#BFDFF0' },
-    { name: '薄紫',       hex: '#D9CBEF' },
-    { name: '白',         hex: '#F5F5F2' },
-    { name: '淡いグレー', hex: '#D6D8DD' },
-    { name: '薄い青',     hex: '#C9E8E4' }
-  ];
-  // 色ごとの音の高さ(Cメジャー・ペンタトニック)
-  const NOTES = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33];
-  const SHAPES = ['circle', 'triangle', 'square'];
+  const SHAPE_LABELS = { circle: '円', triangle: '三角形', square: '四角形' };
+  const COLORS = ['#F3C8D8','#F1E3A4','#BFDFF0','#D9CBEF','#F5F5F2','#D6D8DD','#C9E8E4'];
+  const SOUND = { circle: 392.00, triangle: 523.25, square: 659.25 };
 
-  const STORE_KEY = 'colorfulNoise.thrown.v1';
+  let selectedShape = 'circle';
+  let selectedColor = COLORS[0];
+  let sensorEnabled = false;
+  let audioCtx = null;
+  let swipeStart = null;
+  let participantBodies = [];
+  let demoBodies = [];
+  let worldWidth = 0;
+  let worldHeight = 0;
+  let lastShakeAt = 0;
+  let lastCollisionAt = 0;
+  let gravityX = 0;
+  let gravityY = 1;
+  let orientationBaseGamma = null;
+  let orientationBaseBeta = null;
 
-  const SHAKE_THRESHOLD = 11;   // 振りの検出しきい値(小さいほど敏感)
-  const MAX_TILT_DEG = 55;      // 重力の最大傾き
-  const FIXED_DT = 1 / 120;     // 物理演算の刻み
+  const engine = Engine.create({ enableSleeping: false });
+  engine.gravity.scale = 0.0011;
+  engine.timing.timeScale = 1;
 
-  /* =========================================================
-     基本の変数
-  ========================================================= */
-  const $ = (id) => document.getElementById(id);
-  const stage = $('stage');
-  let W = window.innerWidth;
-  let H = window.innerHeight;
-
-  let state = 'title';          // title -> select -> throw -> world
-  let selShape = null;
-  let selColor = null;
-  let sensorAsked = false;
-  let sensorState = 'unknown';  // unknown / granted / denied
-
-  const sensors = { gamma: 0, beta: 0, orient: false };
-  let keyTilt = 0;              // PCテスト用(矢印キー)
-  let tilt = 0;                 // 平滑化された傾き(度)
-  let gx = 0, gy = 0;
-
-  let bodies = [];
-  let nextId = 1;
-  let preview = null;
-  let drag = null;
-
-  /* =========================================================
-     便利関数
-  ========================================================= */
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const rand = (a, b) => a + Math.random() * (b - a);
-
-  function hexToRgba(hex, a) {
-    const n = parseInt(hex.slice(1), 16);
-    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
-  }
-  function baseSize() { return clamp(Math.min(W, H) * 0.17, 52, 96); }
-  function readSafe() {
-    const cs = getComputedStyle($('safe'));
-    return { top: parseFloat(cs.paddingTop) || 0, bottom: parseFloat(cs.paddingBottom) || 0 };
-  }
-  function loadStored() {
-    try {
-      const s = JSON.parse(localStorage.getItem(STORE_KEY));
-      if (s && SHAPES.includes(s.shape) && COLORS[s.color]) return s;
-    } catch (e) {}
-    return null;
-  }
-  function saveStored(shape, color) {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify({ shape, color })); } catch (e) {}
-  }
-  function clearStored() {
-    try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+  function resetObject() {
+    participantBodies.forEach(b => World.remove(engine.world, b));
+    participantBodies = [];
+    demoBodies.forEach(b => World.remove(engine.world, b));
+    demoBodies = [];
+    updateObjectCount();
+    showSetup();
   }
 
-  let toastTimer = null;
-  function toast(msg, ms) {
-    const t = $('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('show'), ms || 4500);
+  function updateObjectCount() {
+    count.textContent = `${participantBodies.length} OBJECTS · 3 sound guides`;
   }
 
-  /* =========================================================
-     形の定義(見た目と物理形状)
-  ========================================================= */
-  function buildGeom(shape, size) {
-    if (shape === 'circle') {
-      const r = size / 2;
-      return { shape, r, verts: null, normals: null, w: size, h: size, ox: size / 2, oy: size / 2,
-               area: Math.PI * r * r, inertiaPerMass: 0.5 * r * r };
-    }
-    let verts, w, h, ox, oy;
-    if (shape === 'triangle') {
-      w = size * 1.15; h = w * 0.866;
-      verts = [{ x: 0, y: -2 * h / 3 }, { x: w / 2, y: h / 3 }, { x: -w / 2, y: h / 3 }];
-      ox = w / 2; oy = 2 * h / 3;
-    } else {
-      const s = size * 0.92;
-      w = s; h = s;
-      verts = [{ x: -s / 2, y: -s / 2 }, { x: s / 2, y: -s / 2 }, { x: s / 2, y: s / 2 }, { x: -s / 2, y: s / 2 }];
-      ox = s / 2; oy = s / 2;
-    }
-    // 外向きの法線
-    const normals = verts.map((v1, i) => {
-      const v2 = verts[(i + 1) % verts.length];
-      const ex = v2.x - v1.x, ey = v2.y - v1.y;
-      let nx = ey, ny = -ex;
-      const l = Math.hypot(nx, ny);
-      nx /= l; ny /= l;
-      if (nx * v1.x + ny * v1.y < 0) { nx = -nx; ny = -ny; }
-      return { x: nx, y: ny };
-    });
-    // 面積・慣性・外接円
-    let cr = 0, num = 0;
-    for (let i = 0; i < verts.length; i++) {
-      const a = verts[i], b = verts[(i + 1) % verts.length];
-      const c = a.x * b.y - a.y * b.x;
-      cr += c;
-      num += c * (a.x * a.x + a.y * a.y + a.x * b.x + a.y * b.y + b.x * b.x + b.y * b.y);
-    }
-    const area = Math.abs(cr) / 2;
-    const inertiaPerMass = Math.abs(num / (6 * cr));
-    const r = Math.max(...verts.map(v => Math.hypot(v.x, v.y)));
-    return { shape, r, verts, normals, w, h, ox, oy, area, inertiaPerMass };
+  function updatePreview() {
+    previewText.textContent = `${SHAPE_LABELS[selectedShape]} / ${colorName(selectedColor)}`;
+    previewShape.className = `shape-glyph ${selectedShape}`;
+    previewShape.style.background = selectedColor;
   }
 
-  function createEl(geom, colorHex, alpha, demo) {
-    const el = document.createElement('div');
-    el.className = 'obj ' + geom.shape + (demo ? ' demo' : '');
-    el.style.width = geom.w + 'px';
-    el.style.height = geom.h + 'px';
-    el.style.transformOrigin = `${geom.ox}px ${geom.oy}px`;
-    const shadow = document.createElement('div');
-    shadow.className = 'shadow';
-    shadow.appendChild(document.createElement('i'));
-    const glass = document.createElement('div');
-    glass.className = 'glass';
-    glass.style.background = hexToRgba(colorHex, alpha);
-    el.appendChild(shadow);
-    el.appendChild(glass);
-    return el;
-  }
-
-  function createBody(shape, colorIdx, size, x, y, vx, vy, demo) {
-    const g = buildGeom(shape, size);
-    const mass = Math.max(g.area / 1000, 0.5);
-    const el = createEl(g, COLORS[colorIdx].hex, demo ? 0.52 : 0.72, demo);
-    stage.appendChild(el);
-    const octave = shape === 'square' ? 0.5 : 1;
-    const b = {
-      id: nextId++, shape, colorIdx, demo: !!demo,
-      geom: g, r: g.r, verts: g.verts, normals: g.normals,
-      ox: g.ox, oy: g.oy,
-      x, y, vx: vx || 0, vy: vy || 0, a: rand(0, Math.PI * 2), w: rand(-0.5, 0.5),
-      invM: 1 / mass, invI: 1 / (mass * g.inertiaPerMass),
-      freq: NOTES[colorIdx] * octave,
-      el
+  function colorName(hex) {
+    const map = {
+      '#F3C8D8':'淡いピンク','#F1E3A4':'淡い黄色','#BFDFF0':'淡い水色','#D9CBEF':'薄紫','#F5F5F2':'白','#D6D8DD':'淡いグレー','#C9E8E4':'薄い青'
     };
-    bodies.push(b);
-    return b;
+    return map[hex] || hex;
   }
 
-  function renderBody(b) {
-    b.el.style.transform =
-      `translate3d(${(b.x - b.ox).toFixed(2)}px, ${(b.y - b.oy).toFixed(2)}px, 0) rotate(${b.a.toFixed(4)}rad)`;
+  document.querySelectorAll('.shape-btn').forEach(btn => btn.addEventListener('click', () => {
+    selectedShape = btn.dataset.shape;
+    document.querySelectorAll('.shape-btn').forEach(x => x.classList.toggle('selected', x === btn));
+    updatePreview();
+  }));
+
+  document.querySelectorAll('.color-btn').forEach(btn => btn.addEventListener('click', () => {
+    selectedColor = btn.dataset.color;
+    document.querySelectorAll('.color-btn').forEach(x => x.classList.toggle('selected', x === btn));
+    updatePreview();
+  }));
+
+  function setupAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
   }
 
-  function worldVerts(b) {
-    const c = Math.cos(b.a), s = Math.sin(b.a);
-    return b.verts.map(v => ({ x: b.x + v.x * c - v.y * s, y: b.y + v.x * s + v.y * c }));
-  }
-  function worldNormals(b) {
-    const c = Math.cos(b.a), s = Math.sin(b.a);
-    return b.normals.map(n => ({ x: n.x * c - n.y * s, y: n.x * s + n.y * c }));
+  function playTone(shape, velocity = 1) {
+    setupAudio();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+    const now = audioCtx.currentTime;
+    const base = SOUND[shape] || 440;
+    const pitch = base * (0.94 + Math.min(0.35, velocity * 0.55));
+    osc.type = shape === 'circle' ? 'sine' : shape === 'triangle' ? 'triangle' : 'square';
+    osc.frequency.setValueAtTime(pitch, now);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(shape === 'square' ? 1400 : 2600, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.12, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.36);
+    osc.connect(filter).connect(gain).connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.38);
   }
 
-  /* =========================================================
-     音(Web Audio API)
-  ========================================================= */
-  let actx = null, master = null, voices = 0, lastSoundAt = 0;
-  const pairTimes = new Map();
-
-  function initAudio() {
-    if (actx) {
-      if (actx.state === 'suspended') actx.resume();
+  async function enableSensors() {
+    setupAudio();
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+      permissionOverlay.hidden = false;
       return;
     }
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
+    startSensorListeners();
+  }
+
+  async function grantSensors() {
     try {
-      actx = new AC();
-      master = actx.createGain();
-      master.gain.value = 0.8;
-      const comp = actx.createDynamicsCompressor();
-      comp.connect(actx.destination);
-      master.connect(comp);
-
-      // ごく軽いエコー(空間の響き)
-      const delay = actx.createDelay(1.0);
-      delay.delayTime.value = 0.31;
-      const fb = actx.createGain(); fb.gain.value = 0.28;
-      const wet = actx.createGain(); wet.gain.value = 0.22;
-      const lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200;
-      master.connect(delay);
-      delay.connect(lp); lp.connect(fb); fb.connect(delay);
-      lp.connect(wet); wet.connect(comp);
-
-      if (actx.state === 'suspended') actx.resume();
-    } catch (e) { actx = null; }
-  }
-
-  const SHAPE_SOUND = {
-    circle:   { type: 'sine',     gain: 1.0,  cutoff: 4000, dur: 1.1 },
-    triangle: { type: 'triangle', gain: 0.8,  cutoff: 3000, dur: 0.8 },
-    square:   { type: 'square',   gain: 0.4,  cutoff: 1500, dur: 0.55 }
-  };
-
-  function playNote(shape, freq, vol) {
-    if (!actx || voices > 14) return;
-    const cfg = SHAPE_SOUND[shape];
-    const t = actx.currentTime;
-    const o = actx.createOscillator();
-    const g = actx.createGain();
-    const f = actx.createBiquadFilter();
-    o.type = cfg.type;
-    o.frequency.value = freq;
-    f.type = 'lowpass';
-    f.frequency.value = cfg.cutoff;
-    const v = Math.max(vol * cfg.gain, 0.002);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(v, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + cfg.dur);
-    o.connect(f); f.connect(g); g.connect(master);
-    voices++;
-    o.onended = () => { voices--; try { g.disconnect(); } catch (e) {} };
-    o.start(t);
-    o.stop(t + cfg.dur + 0.05);
-  }
-
-  function onImpact(A, B, impact) {
-    if (!actx || impact < 45) return;
-    const now = performance.now();
-    if (now - lastSoundAt < 25) return;
-    const key = A.id < B.id ? A.id + '-' + B.id : B.id + '-' + A.id;
-    const last = pairTimes.get(key) || 0;
-    if (now - last < 110) return;
-    pairTimes.set(key, now);
-    lastSoundAt = now;
-    const vol = clamp(0.05 + impact / 1000 * 0.2, 0.05, 0.25);
-    playNote(A.shape, A.freq, vol * 0.7);
-    playNote(B.shape, B.freq, vol * 0.7);
-  }
-
-  /* =========================================================
-     物理演算
-  ========================================================= */
-  function projectPoly(vs, ax, ay) {
-    let mn = Infinity, mx = -Infinity;
-    for (const v of vs) {
-      const p = v.x * ax + v.y * ay;
-      if (p < mn) mn = p;
-      if (p > mx) mx = p;
-    }
-    return [mn, mx];
-  }
-  function insidePoly(p, vs, ns) {
-    for (let i = 0; i < vs.length; i++) {
-      if ((p.x - vs[i].x) * ns[i].x + (p.y - vs[i].y) * ns[i].y > 0) return false;
-    }
-    return true;
-  }
-
-  // 多角形 × 多角形
-  function polyPoly(A, B) {
-    const va = worldVerts(A), vb = worldVerts(B);
-    const na = worldNormals(A), nb = worldNormals(B);
-    const axes = na.concat(nb);
-    let best = Infinity, bn = null;
-    for (const ax of axes) {
-      const pa = projectPoly(va, ax.x, ax.y);
-      const pb = projectPoly(vb, ax.x, ax.y);
-      const o = Math.min(pa[1] - pb[0], pb[1] - pa[0]);
-      if (o <= 0) return null;
-      if (o < best) { best = o; bn = ax; }
-    }
-    let nx = bn.x, ny = bn.y;
-    if (nx * (B.x - A.x) + ny * (B.y - A.y) < 0) { nx = -nx; ny = -ny; }
-    const pts = [];
-    for (const v of va) if (insidePoly(v, vb, nb)) pts.push(v);
-    for (const v of vb) if (insidePoly(v, va, na)) pts.push(v);
-    let px, py;
-    if (pts.length) {
-      px = 0; py = 0;
-      for (const p of pts) { px += p.x; py += p.y; }
-      px /= pts.length; py /= pts.length;
-    } else {
-      px = (A.x + B.x) / 2; py = (A.y + B.y) / 2;
-    }
-    return { nx, ny, depth: best, px, py };
-  }
-
-  // 円 × 多角形(法線は 多角形 → 円 の向き)
-  function circlePoly(C, P) {
-    const vs = worldVerts(P), ns = worldNormals(P);
-    const n = vs.length;
-    let sep = -Infinity, idx = 0;
-    for (let i = 0; i < n; i++) {
-      const s = (C.x - vs[i].x) * ns[i].x + (C.y - vs[i].y) * ns[i].y;
-      if (s > C.r) return null;
-      if (s > sep) { sep = s; idx = i; }
-    }
-    const v1 = vs[idx], v2 = vs[(idx + 1) % n];
-    const ex = v2.x - v1.x, ey = v2.y - v1.y;
-    const t = clamp(((C.x - v1.x) * ex + (C.y - v1.y) * ey) / (ex * ex + ey * ey), 0, 1);
-    const cx = v1.x + ex * t, cy = v1.y + ey * t;
-    if (sep < 0) {
-      return { nx: ns[idx].x, ny: ns[idx].y, depth: C.r - sep, px: cx, py: cy };
-    }
-    const dx = C.x - cx, dy = C.y - cy;
-    const d = Math.hypot(dx, dy);
-    if (d >= C.r) return null;
-    if (d < 1e-6) return { nx: ns[idx].x, ny: ns[idx].y, depth: C.r, px: cx, py: cy };
-    return { nx: dx / d, ny: dy / d, depth: C.r - d, px: cx, py: cy };
-  }
-
-  // 法線は A → B の向き
-  function collide(a, b) {
-    if (a.shape === 'circle' && b.shape === 'circle') {
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const d = Math.hypot(dx, dy);
-      const rs = a.r + b.r;
-      if (d >= rs) return null;
-      const nx = d > 0 ? dx / d : 1, ny = d > 0 ? dy / d : 0;
-      return { nx, ny, depth: rs - d, px: a.x + nx * a.r, py: a.y + ny * a.r };
-    }
-    if (a.shape === 'circle') {
-      const m = circlePoly(a, b);
-      if (!m) return null;
-      return { nx: -m.nx, ny: -m.ny, depth: m.depth, px: m.px, py: m.py };
-    }
-    if (b.shape === 'circle') return circlePoly(b, a);
-    return polyPoly(a, b);
-  }
-
-  function resolve(A, B, m) {
-    const nx = m.nx, ny = m.ny;
-    const im = A.invM + B.invM;
-
-    // めり込みの補正
-    const corr = Math.max(m.depth - 0.4, 0) * 0.7 / im;
-    A.x -= nx * corr * A.invM; A.y -= ny * corr * A.invM;
-    B.x += nx * corr * B.invM; B.y += ny * corr * B.invM;
-
-    const rax = m.px - A.x, ray = m.py - A.y;
-    const rbx = m.px - B.x, rby = m.py - B.y;
-    const vax = A.vx - A.w * ray, vay = A.vy + A.w * rax;
-    const vbx = B.vx - B.w * rby, vby = B.vy + B.w * rbx;
-    const rvx = vbx - vax, rvy = vby - vay;
-    const vn = rvx * nx + rvy * ny;
-    if (vn > 0) return;
-
-    const impact = -vn;
-    const e = impact > 90 ? 0.32 : 0;
-    const raN = rax * ny - ray * nx;
-    const rbN = rbx * ny - rby * nx;
-    const denom = im + raN * raN * A.invI + rbN * rbN * B.invI;
-    const j = -(1 + e) * vn / denom;
-    A.vx -= j * nx * A.invM; A.vy -= j * ny * A.invM; A.w -= j * raN * A.invI;
-    B.vx += j * nx * B.invM; B.vy += j * ny * B.invM; B.w += j * rbN * B.invI;
-
-    // 摩擦
-    let tx = rvx - vn * nx, ty = rvy - vn * ny;
-    const tl = Math.hypot(tx, ty);
-    if (tl > 1e-6) {
-      tx /= tl; ty /= tl;
-      const raT = rax * ty - ray * tx;
-      const rbT = rbx * ty - rby * tx;
-      const denomT = im + raT * raT * A.invI + rbT * rbT * B.invI;
-      let jt = -tl / denomT;
-      const mu = 0.3;
-      jt = Math.max(jt, -mu * j);
-      A.vx -= jt * tx * A.invM; A.vy -= jt * ty * A.invM; A.w -= jt * raT * A.invI;
-      B.vx += jt * tx * B.invM; B.vy += jt * ty * B.invM; B.w += jt * rbT * B.invI;
-    }
-
-    onImpact(A, B, impact);
-  }
-
-  // 壁(画面の端)
-  function wallImpulse(b, nx, ny, px, py) {
-    const rax = px - b.x, ray = py - b.y;
-    let vpx = b.vx - b.w * ray, vpy = b.vy + b.w * rax;
-    const vn = vpx * nx + vpy * ny;
-    if (vn >= 0) return;
-    const e = -vn > 80 ? 0.3 : 0;
-    const raN = rax * ny - ray * nx;
-    const j = -(1 + e) * vn / (b.invM + raN * raN * b.invI);
-    b.vx += nx * j * b.invM; b.vy += ny * j * b.invM; b.w += j * raN * b.invI;
-
-    vpx = b.vx - b.w * ray; vpy = b.vy + b.w * rax;
-    const tx = -ny, ty = nx;
-    const vt = vpx * tx + vpy * ty;
-    const raT = rax * ty - ray * tx;
-    let jt = -vt / (b.invM + raT * raT * b.invI);
-    const lim = 0.35 * j;
-    jt = clamp(jt, -lim, lim);
-    b.vx += tx * jt * b.invM; b.vy += ty * jt * b.invM; b.w += jt * raT * b.invI;
-  }
-
-  function wallCollide(b) {
-    const walls = [[1, 0, 0], [-1, 0, -W], [0, 1, 0], [0, -1, -H]];
-    for (const [nx, ny, c] of walls) {
-      if (b.shape === 'circle') {
-        const pen = c + b.r - (b.x * nx + b.y * ny);
-        if (pen > 0) {
-          wallImpulse(b, nx, ny, b.x - nx * b.r, b.y - ny * b.r);
-          b.x += nx * pen; b.y += ny * pen;
-        }
-      } else {
-        const vs = worldVerts(b);
-        let maxPen = 0;
-        for (const v of vs) {
-          const pen = c - (v.x * nx + v.y * ny);
-          if (pen > 0) {
-            wallImpulse(b, nx, ny, v.x, v.y);
-            if (pen > maxPen) maxPen = pen;
-          }
-        }
-        if (maxPen > 0) { b.x += nx * maxPen; b.y += ny * maxPen; }
-      }
-    }
-  }
-
-  function step(dt) {
-    for (const b of bodies) {
-      b.vx += gx * dt; b.vy += gy * dt;
-      const ld = 1 - 0.18 * dt;
-      b.vx *= ld; b.vy *= ld;
-      b.w *= 1 - 0.5 * dt;
-      const sp = Math.hypot(b.vx, b.vy);
-      if (sp > 1600) { b.vx *= 1600 / sp; b.vy *= 1600 / sp; }
-      b.w = clamp(b.w, -12, 12);
-      b.x += b.vx * dt; b.y += b.vy * dt; b.a += b.w * dt;
-    }
-    for (let it = 0; it < 3; it++) {
-      for (let i = 0; i < bodies.length; i++) {
-        for (let j = i + 1; j < bodies.length; j++) {
-          const A = bodies[i], B = bodies[j];
-          const dx = B.x - A.x, dy = B.y - A.y, rs = A.r + B.r;
-          if (dx * dx + dy * dy > rs * rs) continue;
-          const m = collide(A, B);
-          if (m) resolve(A, B, m);
-        }
-      }
-      for (const b of bodies) wallCollide(b);
-    }
-  }
-
-  /* =========================================================
-     センサー(傾き・振り)
-  ========================================================= */
-  function screenAngle() {
-    if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
-    if (typeof window.orientation === 'number') return window.orientation;
-    return 0;
-  }
-
-  window.addEventListener('deviceorientation', (e) => {
-    if (e.gamma == null || e.beta == null) return;
-    sensors.gamma = e.gamma;
-    sensors.beta = e.beta;
-    sensors.orient = true;
-  });
-
-  let lastShake = 0;
-  window.addEventListener('devicemotion', (e) => {
-    let mag = 0;
-    const a = e.acceleration;
-    if (a && a.x != null) {
-      mag = Math.hypot(a.x, a.y, a.z);
-    } else {
-      const g = e.accelerationIncludingGravity;
-      if (!g || g.x == null) return;
-      mag = Math.abs(Math.hypot(g.x, g.y, g.z) - 9.8);
-    }
-    const now = performance.now();
-    if (mag > SHAKE_THRESHOLD && now - lastShake > 450) {
-      lastShake = now;
-      shake(mag);
-    }
-  });
-
-  function shake(mag) {
-    const k = clamp(mag / 20, 0.6, 1.6);
-    for (const b of bodies) {
-      const ang = rand(0, Math.PI * 2);
-      const sp = rand(70, 160) * k;
-      b.vx += Math.cos(ang) * sp;
-      b.vy += Math.sin(ang) * sp - 90 * k;
-      b.w += rand(-1.6, 1.6);
-    }
-  }
-
-  function updateGravity(dt) {
-    let lr = 0;
-    if (sensors.orient) {
-      const ang = screenAngle();
-      if (ang === 90) lr = sensors.beta;
-      else if (ang === 270 || ang === -90) lr = -sensors.beta;
-      else if (ang === 180) lr = -sensors.gamma;
-      else lr = sensors.gamma;
-    } else {
-      lr = keyTilt;
-    }
-    lr = clamp(lr, -MAX_TILT_DEG, MAX_TILT_DEG);
-    if (Math.abs(lr) < 3) lr = 0;                 // 小さな揺れは無視
-    tilt += (lr - tilt) * (1 - Math.exp(-dt * 4)); // 平滑化
-    const G = clamp(H * 0.65, 380, 700);
-    const rad = tilt * Math.PI / 180;
-    gx = G * Math.sin(rad);
-    gy = G * Math.cos(rad);
-  }
-
-  // PCでのテスト用: 矢印キーで傾き、スペースで振り
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowLeft') keyTilt = -28;
-    else if (e.key === 'ArrowRight') keyTilt = 28;
-    else if (e.key === ' ') { e.preventDefault(); shake(14); }
-  });
-  window.addEventListener('keyup', (e) => {
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') keyTilt = 0;
-  });
-
-  async function requestSensors() {
-    const tasks = [];
-    try {
-      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        tasks.push(DeviceOrientationEvent.requestPermission());
-      }
+      const permissions = [];
       if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-        tasks.push(DeviceMotionEvent.requestPermission());
+        permissions.push(DeviceMotionEvent.requestPermission());
       }
-    } catch (e) {}
-    if (!tasks.length) { sensorState = 'granted'; return; }
-    const res = await Promise.allSettled(tasks);
-    const ok = res.some(r => r.status === 'fulfilled' && r.value === 'granted');
-    sensorState = ok ? 'granted' : 'denied';
-  }
-
-  /* =========================================================
-     画面の切り替え
-  ========================================================= */
-  const pTitle = $('p-title');
-  const pSelect = $('p-select');
-  const hint = $('hint');
-
-  function showPanel(which) {
-    pTitle.classList.toggle('show', which === 'title');
-    pSelect.classList.toggle('show', which === 'select');
-  }
-
-  function showTitle() {
-    state = 'title';
-    hint.classList.remove('show');
-    const stored = loadStored();
-    $('already').style.display = stored ? 'block' : 'none';
-    $('status').textContent = '';
-    if (sensorAsked) {
-      $('sensorNote').style.display = 'none';
-      $('btnSkip').style.display = 'none';
-      $('btnStart').textContent = 'はじめる';
-    } else {
-      $('sensorNote').style.display = '';
-      $('btnSkip').style.display = '';
-      $('btnStart').textContent = 'センサーを許可する';
-    }
-    showPanel('title');
-  }
-
-  function proceed() {
-    const stored = loadStored();
-    if (stored) {
-      enterWorld(stored);
-    } else {
-      state = 'select';
-      showPanel('select');
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        permissions.push(DeviceOrientationEvent.requestPermission());
+      }
+      const result = await Promise.all(permissions);
+      if (result.some(v => v === 'denied')) throw new Error('denied');
+      permissionOverlay.hidden = true;
+      startSensorListeners();
+    } catch (err) {
+      permissionOverlay.hidden = false;
+      document.querySelector('#permissionCard p').textContent = 'センサーを許可できませんでした。センサーなしでも基本操作を試せます。';
+      continueBtn.disabled = false;
+      continueBtn.textContent = 'センサーなしで続ける';
     }
   }
 
-  function enterWorld(stored) {
-    showPanel(null);
-    state = 'world';
-    hint.classList.remove('show');
-    if (stored && !bodies.some(b => !b.demo)) {
-      createBody(stored.shape, stored.color, baseSize(), W * 0.5, H * 0.2, rand(-60, 60), 40, false);
+  function startSensorListeners() {
+    if (sensorEnabled) return;
+    sensorEnabled = true;
+    window.addEventListener('deviceorientation', handleOrientation, { passive: true });
+    window.addEventListener('devicemotion', handleMotion, { passive: true });
+    sensorBtn.textContent = 'センサー有効 ✓';
+    sensorBtn.style.opacity = '.62';
+    continueBtn.disabled = false;
+  }
+
+  function handleOrientation(event) {
+    if (!sensorEnabled) return;
+
+    const rawGamma = Number.isFinite(event.gamma) ? event.gamma : 0;
+    const rawBeta = Number.isFinite(event.beta) ? event.beta : 90;
+
+    // iPhoneを普通に持った状態を基準にして、左右・前後の傾きを別々に反映
+    if (orientationBaseGamma === null) orientationBaseGamma = rawGamma;
+    if (orientationBaseBeta === null) orientationBaseBeta = rawBeta;
+
+    const deltaGamma = Math.max(-50, Math.min(50, rawGamma - orientationBaseGamma));
+    const deltaBeta = Math.max(-50, Math.min(50, rawBeta - orientationBaseBeta));
+
+    // 横方向：左右の傾き
+    const targetX = deltaGamma / 35;
+
+    // 縦方向：前後の傾き。通常時は下向き重力を維持しつつ、上下に変化する
+    const targetY = 1 + (deltaBeta / 35);
+
+    gravityX = Math.max(-1.6, Math.min(1.6, targetX));
+    gravityY = Math.max(-0.6, Math.min(2.6, targetY));
+  }
+
+  function handleMotion(event) {
+    const a = event.accelerationIncludingGravity;
+    if (!a) return;
+    const x = a.x || 0, y = a.y || 0, z = a.z || 0;
+    const magnitude = Math.sqrt(x*x + y*y + z*z);
+    const now = performance.now();
+    if (magnitude > 23 && now - lastShakeAt > 650) {
+      lastShakeAt = now;
+      const direction = Vector.normalise({ x: x || (Math.random()-.5), y: y || -1 });
+      [...demoBodies, ...participantBodies].forEach(body => {
+        Body.applyForce(body, body.position, { x: direction.x * 0.008, y: direction.y * 0.008 });
+      });
     }
-    toast('このブラウザではすでにオブジェクトを投げています', 5000);
   }
 
-  $('btnStart').addEventListener('click', async () => {
-    initAudio();
-    if (sensorAsked) { proceed(); return; }
-    sensorAsked = true;
-    $('btnStart').disabled = true;
-    await requestSensors();
-    $('btnStart').disabled = false;
-    if (sensorState === 'denied') {
-      $('status').textContent = 'センサーなしで続けます';
-      setTimeout(proceed, 900);
-    } else {
-      proceed();
-    }
+  sensorBtn.addEventListener('click', enableSensors);
+  grantPermission.addEventListener('click', grantSensors);
+  skipPermission.addEventListener('click', () => { permissionOverlay.hidden = true; continueBtn.disabled = false; continueBtn.textContent = '投げ込む準備をする'; });
+
+  continueBtn.addEventListener('click', () => {
+    setupAudio();
+    showSpace();
   });
 
-  $('btnSkip').addEventListener('click', () => {
-    initAudio();
-    sensorAsked = true;
-    sensorState = 'denied';
-    proceed();
+  resetButton.addEventListener('click', resetObject);
+  addMoreButton.addEventListener('click', () => {
+    showSetup();
   });
 
-  /* ---------- 形・色の選択 ---------- */
-  const cardsEl = $('cards');
-  const swEl = $('swatches');
-
-  SHAPES.forEach((s) => {
-    const b = document.createElement('button');
-    b.className = 'card';
-    b.dataset.shape = s;
-    b.setAttribute('aria-label', s === 'circle' ? '円' : s === 'triangle' ? '三角形' : '四角形');
-    const i = document.createElement('div');
-    i.className = 'ico ' + s;
-    b.appendChild(i);
-    b.addEventListener('click', () => { selShape = s; refreshSelect(); });
-    cardsEl.appendChild(b);
-  });
-
-  COLORS.forEach((c, idx) => {
-    const b = document.createElement('button');
-    b.className = 'sw';
-    b.style.setProperty('--c', c.hex);
-    b.setAttribute('aria-label', c.name);
-    b.addEventListener('click', () => { selColor = idx; refreshSelect(); });
-    swEl.appendChild(b);
-  });
-
-  function refreshSelect() {
-    cardsEl.querySelectorAll('.card').forEach(el => el.classList.toggle('on', el.dataset.shape === selShape));
-    swEl.querySelectorAll('.sw').forEach((el, i) => el.classList.toggle('on', i === selColor));
-    if (selColor !== null) cardsEl.style.setProperty('--ico', hexToRgba(COLORS[selColor].hex, 0.9));
-    else cardsEl.style.removeProperty('--ico');
-    $('btnReady').disabled = !(selShape && selColor !== null);
+  function showSetup() {
+    setup.classList.add('active');
+    space.classList.remove('active');
+    continueBtn.disabled = !sensorEnabled;
+    continueBtn.textContent = participantBodies.length > 0 ? 'もう一つ投げ込む' : '投げ込む準備をする';
+    document.querySelector('#hint').textContent = participantBodies.length > 0
+      ? `これまでに ${participantBodies.length} 個投げ込みました。もう一つ形と色を選べます。`
+      : 'センサーを許可すると、傾きで重力を動かせます。振るとオブジェクトが少し弾みます。';
+    updatePreview();
   }
 
-  /* ---------- 準備する → 投げ込み画面 ---------- */
-  function previewHome() {
-    const size = baseSize();
-    const safe = readSafe();
-    return { x: W / 2, y: H - safe.bottom - size * 0.5 - 56, size };
+  function showSpace() {
+    setup.classList.remove('active');
+    space.classList.add('active');
+    resizeCanvas();
+    if (demoBodies.length === 0) createDemoBodies();
+    updateObjectCount();
+    modeHint.textContent = participantBodies.length === 0
+      ? '画面下から上へスワイプして、オブジェクトを投げ込む'
+      : '画面下から上へスワイプして、もう一つ投げ込めます';
+    setTimeout(() => modeHint.classList.add('hidden'), 5500);
+    startLoop();
   }
 
-  function createPreview() {
-    removePreview();
-    const home = previewHome();
-    const g = buildGeom(selShape, home.size);
-    const el = createEl(g, COLORS[selColor].hex, 0.72, false);
-    el.style.zIndex = '2';
-    stage.appendChild(el);
-    preview = { el, geom: g, ox: g.ox, oy: g.oy, x: home.x, y: home.y, a: 0, home, t: 0 };
-    placeHint();
-  }
-  function removePreview() {
-    if (preview) { preview.el.remove(); preview = null; }
-    drag = null;
-  }
-  function placeHint() {
-    if (!preview) return;
-    hint.style.top = Math.max(60, preview.home.y - preview.home.size * 0.5 - 84) + 'px';
+  function resizeCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    worldWidth = window.innerWidth;
+    worldHeight = window.innerHeight;
+    canvas.width = Math.floor(worldWidth * dpr);
+    canvas.height = Math.floor(worldHeight * dpr);
+    canvas.style.width = worldWidth + 'px';
+    canvas.style.height = worldHeight + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    rebuildWalls();
   }
 
-  $('btnReady').addEventListener('click', () => {
-    initAudio();
-    showPanel(null);
-    state = 'throw';
-    createPreview();
-    hint.classList.add('show');
-  });
-
-  /* ---------- 投げ込み(下から上へのスワイプ) ---------- */
-  stage.addEventListener('pointerdown', (e) => {
-    initAudio();
-    if (state !== 'throw' || !preview) return;
-    if (e.clientY < H * 0.6) return;           // 画面下部からのスワイプだけ受け付ける
-    drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x: e.clientX, y: e.clientY };
-    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
-    e.preventDefault();
-  });
-  stage.addEventListener('pointermove', (e) => {
-    if (!drag || e.pointerId !== drag.id) return;
-    drag.x = e.clientX; drag.y = e.clientY;
-    e.preventDefault();
-  });
-  stage.addEventListener('pointerup', (e) => {
-    if (!drag || e.pointerId !== drag.id) return;
-    const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
-    drag = null;
-    const dist = Math.hypot(dx, dy);
-    if (dist >= 50 && dy / dist < -0.35) {
-      throwObject(dx / dist, dy / dist);
-    }
-  });
-  stage.addEventListener('pointercancel', () => { drag = null; });
-
-  function throwObject(dirx, diry) {
-    if (!preview) return;
-    const S = clamp(H * 1.05, 600, 1000);      // 投げる強さは一定
-    const b = createBody(selShape, selColor, preview.home.size, preview.x, preview.y, dirx * S, diry * S, false);
-    b.w = dirx * 2.5 + rand(-0.8, 0.8);
-    saveStored(selShape, selColor);
-    removePreview();
-    hint.classList.remove('show');
-    state = 'world';
-    toast('傾けたり、振ったりしてみてください', 6000);
+  let walls = [];
+  function rebuildWalls() {
+    walls.forEach(w => World.remove(engine.world, w));
+    const thickness = 80;
+    walls = [
+      Bodies.rectangle(worldWidth/2, worldHeight + thickness/2, worldWidth + 200, thickness, { isStatic: true }),
+      Bodies.rectangle(-thickness/2, worldHeight/2, thickness, worldHeight + 200, { isStatic: true }),
+      Bodies.rectangle(worldWidth + thickness/2, worldHeight/2, thickness, worldHeight + 200, { isStatic: true }),
+      Bodies.rectangle(worldWidth/2, -thickness/2, worldWidth + 200, thickness, { isStatic: true })
+    ];
+    World.add(engine.world, walls);
   }
 
-  /* ---------- RESET ---------- */
-  $('reset').addEventListener('click', () => {
-    bodies = bodies.filter(b => {
-      if (b.demo) return true;
-      b.el.remove();
-      return false;
+  function makeBody(shape, x, y) {
+    const size = Math.min(worldWidth, worldHeight) * 0.12;
+    const options = {
+      restitution: 0.72,
+      friction: 0.012,
+      frictionAir: 0.006,
+      density: 0.0018,
+      label: `object:${shape}`,
+      render: { visible: false }
+    };
+    if (shape === 'circle') return Bodies.circle(x, y, size * .48, options);
+    if (shape === 'triangle') return Bodies.polygon(x, y, 3, size * .55, { ...options, chamfer: { radius: 2 } });
+    return Bodies.rectangle(x, y, size * .88, size * .88, { ...options, chamfer: { radius: 8 } });
+  }
+
+  function createDemoBodies() {
+    demoBodies.forEach(b => World.remove(engine.world, b));
+    demoBodies = [];
+    const presets = [
+      ['circle', '#D9E8EA', worldWidth * .22, worldHeight * .34],
+      ['triangle', '#E4DDF0', worldWidth * .70, worldHeight * .27],
+      ['square', '#F0E7C4', worldWidth * .62, worldHeight * .52]
+    ];
+    presets.forEach(([shape, color, x, y]) => {
+      const b = makeBody(shape, x, y);
+      b.plugin = { color, shape, demo: true };
+      b.isDemo = true;
+      Body.setVelocity(b, { x: (Math.random()-.5)*1.2, y: (Math.random()-.5)*1.2 });
+      Body.setAngularVelocity(b, (Math.random()-.5)*.035);
+      demoBodies.push(b);
     });
-    removePreview();
-    clearStored();
-    selShape = null; selColor = null;
-    refreshSelect();
-    $('toast').classList.remove('show');
-    showTitle();
+    World.add(engine.world, demoBodies);
+  }
+
+  function launchObject(dx, dy) {
+    const x = worldWidth / 2;
+    const y = worldHeight - Math.max(95, worldHeight * 0.12);
+
+    const body = makeBody(selectedShape, x, y);
+    body.plugin = { color: selectedColor, shape: selectedShape, participant: true };
+    body.isParticipant = true;
+    World.add(engine.world, body);
+
+    const direction = Vector.normalise({ x: dx, y: dy });
+    Body.setVelocity(body, { x: direction.x * 8.3, y: direction.y * 8.3 });
+    Body.setAngularVelocity(body, (Math.random() - .5) * .12);
+
+    participantBodies.push(body);
+    updateObjectCount();
+
+    modeHint.textContent = 'もう一つ投げ込むには「もう一つ作る」';
+    modeHint.classList.remove('hidden');
+    setTimeout(() => modeHint.classList.add('hidden'), 4200);
+  }
+
+  function onPointerDown(e) {
+    if (!space.classList.contains('active')) return;
+    swipeStart = { x: e.clientX, y: e.clientY, t: performance.now() };
+  }
+
+  function onPointerUp(e) {
+    if (!swipeStart) { swipeStart = null; return; }
+    const dx = e.clientX - swipeStart.x;
+    const dy = e.clientY - swipeStart.y;
+    const startY = swipeStart.y;
+    swipeStart = null;
+    if (startY < worldHeight * 0.55) return;
+    if (dy > -45) return;
+    if (Math.hypot(dx, dy) < 60) return;
+    launchObject(dx, dy);
+  }
+
+  canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
+  canvas.addEventListener('pointerup', onPointerUp, { passive: true });
+  canvas.addEventListener('pointercancel', () => swipeStart = null, { passive: true });
+
+  function drawGlass(body) {
+    const p = body.position;
+    const angle = body.angle;
+    const s = body.plugin?.color || '#F3C8D8';
+    const shape = body.plugin?.shape || 'circle';
+    const size = Math.min(worldWidth, worldHeight) * 0.12;
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(angle);
+    ctx.globalAlpha = .58;
+    ctx.shadowColor = 'rgba(105,118,124,.14)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 8;
+
+    if (shape === 'circle') {
+      ctx.beginPath();
+      ctx.arc(0, 0, size * .48, 0, Math.PI*2);
+      ctx.fillStyle = s;
+      ctx.fill();
+    } else if (shape === 'triangle') {
+      ctx.beginPath();
+      const r = size * .58;
+      for (let i=0;i<3;i++) {
+        const a = -Math.PI/2 + i * (Math.PI*2/3);
+        const x = Math.cos(a)*r, y = Math.sin(a)*r;
+        if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = s;
+      ctx.fill();
+    } else {
+      const w = size*.9;
+      ctx.beginPath();
+      ctx.roundRect(-w/2,-w/2,w,w,9);
+      ctx.fillStyle = s;
+      ctx.fill();
+    }
+
+    ctx.shadowColor = 'transparent';
+    ctx.globalAlpha = .2;
+    if (shape === 'circle') {
+      ctx.beginPath(); ctx.arc(-size*.1, -size*.13, size*.22, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.arc(-size*.16, -size*.18, size*.11, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawBackground() {
+    ctx.clearRect(0,0,worldWidth,worldHeight);
+    const g = ctx.createRadialGradient(worldWidth*.5, worldHeight*.38, 20, worldWidth*.5, worldHeight*.5, Math.max(worldWidth,worldHeight)*.7);
+    g.addColorStop(0, 'rgba(255,255,255,.38)');
+    g.addColorStop(1, 'rgba(224,231,234,.12)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,worldWidth,worldHeight);
+  }
+
+  Events.on(engine, 'collisionStart', event => {
+    const now = performance.now();
+    if (now - lastCollisionAt < 45) return;
+    for (const pair of event.pairs) {
+      const a = pair.bodyA, b = pair.bodyB;
+      if (!a.plugin?.shape || !b.plugin?.shape) continue;
+      if (a.plugin.demo && b.plugin.demo) continue;
+      const speed = a.velocity.x*a.velocity.x + a.velocity.y*a.velocity.y + b.velocity.x*b.velocity.x + b.velocity.y*b.velocity.y;
+      if (speed < 0.4) continue;
+      lastCollisionAt = now;
+      const soundingShape = a.plugin.demo && !b.plugin.demo ? b.plugin.shape : a.plugin.demo && b.plugin.demo ? a.plugin.shape : a.plugin.shape;
+      playTone(soundingShape, Math.min(1, Math.sqrt(speed)/10));
+      break;
+    }
   });
 
-  /* =========================================================
-     メインループ
-  ========================================================= */
-  let lastT = 0, acc = 0;
-
-  function frame(t) {
-    const dt = Math.min((t - lastT) / 1000, 0.05);
-    lastT = t;
-    updateGravity(dt);
-    acc += dt;
-    while (acc >= FIXED_DT) { step(FIXED_DT); acc -= FIXED_DT; }
-    for (const b of bodies) renderBody(b);
-
-    if (preview) {
-      preview.t += dt;
-      let tx, ty, k;
-      if (drag) {
-        tx = clamp(preview.home.x + (drag.x - drag.sx) * 0.9, 30, W - 30);
-        ty = clamp(preview.home.y + (drag.y - drag.sy) * 0.9, 30, H - 30);
-        k = 0.4;
-      } else {
-        tx = preview.home.x;
-        ty = preview.home.y + Math.sin(preview.t * 1.6) * 4;
-        k = 0.15;
-      }
-      preview.x += (tx - preview.x) * k;
-      preview.y += (ty - preview.y) * k;
-      preview.a = Math.sin(preview.t * 1.1) * 0.08;
-      preview.el.style.transform =
-        `translate3d(${(preview.x - preview.ox).toFixed(2)}px, ${(preview.y - preview.oy).toFixed(2)}px, 0) rotate(${preview.a.toFixed(4)}rad)`;
+  let loopStarted = false;
+  function startLoop() {
+    if (loopStarted) return;
+    loopStarted = true;
+    let last = performance.now();
+    function frame(t) {
+      const dt = Math.min(32, t-last); last=t;
+      engine.gravity.x += (gravityX - engine.gravity.x) * 0.08;
+      engine.gravity.y += (gravityY - engine.gravity.y) * 0.08;
+      Engine.update(engine, dt);
+      drawBackground();
+      demoBodies.forEach(drawGlass);
+      participantBodies.forEach(drawGlass);
+      requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
   }
 
-  /* ---------- 画面サイズの変化 ---------- */
-  function onResize() {
-    W = window.innerWidth;
-    H = window.innerHeight;
-    for (const b of bodies) {
-      b.x = clamp(b.x, b.r, Math.max(b.r, W - b.r));
-      b.y = clamp(b.y, b.r, Math.max(b.r, H - b.r));
-    }
-    if (preview) {
-      preview.home = previewHome();
-      placeHint();
-    }
-  }
-  window.addEventListener('resize', onResize);
-  window.addEventListener('orientationchange', () => setTimeout(onResize, 300));
+  window.addEventListener('resize', () => { if (space.classList.contains('active')) resizeCanvas(); });
 
-  // ピンチ拡大などを防ぐ
-  document.addEventListener('gesturestart', (e) => e.preventDefault());
-  document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
-
-  /* =========================================================
-     起動:デモ用オブジェクト3個 + タイトル画面
-  ========================================================= */
-  function init() {
-    const s = baseSize() * 0.62;
-    createBody('circle',   6, s, W * 0.25, H * 0.40, 20, 0,  true);
-    createBody('triangle', 3, s, W * 0.50, H * 0.28, -15, 0, true);
-    createBody('square',   1, s, W * 0.75, H * 0.36, 10, 0,  true);
-    showTitle();
-    requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(frame); });
-  }
-  init();
+  updatePreview();
+  continueBtn.disabled = true;
 })();
 </script>
-
 </body>
 </html>
