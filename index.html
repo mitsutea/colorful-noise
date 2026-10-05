@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#EEF1F2" />
+  <title>Colorful Noise</title>
+  <style>
+    :root {
+      --bg: #EEF1F2;
+      --text: #536168;
+      --muted: #7A878D;
+      --panel: rgba(255,255,255,.58);
+      --panel-border: rgba(255,255,255,.75);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color: var(--text); }
+    button { font: inherit; }
+    #app { position: fixed; inset: 0; overflow: hidden; background:
+      radial-gradient(circle at 20% 10%, rgba(255,255,255,.8), transparent 35%),
+      radial-gradient(circle at 85% 80%, rgba(211,226,230,.45), transparent 40%),
+      var(--bg); }
+    canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+    .screen { position: absolute; inset: 0; display: none; }
+    .screen.active { display: block; }
+
+    #setup { padding: max(28px, env(safe-area-inset-top)) 22px max(28px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; }
+    .eyebrow { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+    h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-weight: 500; font-size: clamp(42px, 12vw, 64px); letter-spacing: -.03em; color: #4C5A60; }
+    .desc { margin: 14px 0 0; max-width: 32rem; line-height: 1.8; font-size: 14px; color: #68767C; }
+    .section { margin-top: 28px; }
+    .section-label { font-size: 11px; letter-spacing: .12em; color: #879197; margin-bottom: 11px; }
+    .shape-row, .color-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .shape-btn, .color-btn { border: 1px solid rgba(132,145,151,.20); background: rgba(255,255,255,.48); box-shadow: 0 8px 24px rgba(74,88,94,.07); }
+    .shape-btn { width: 72px; height: 64px; border-radius: 18px; color: #5F6C71; display: grid; place-items: center; }
+    .shape-btn.selected, .color-btn.selected { outline: 2px solid rgba(95,109,115,.45); outline-offset: 2px; background: rgba(255,255,255,.8); }
+    .shape-glyph { width: 26px; height: 26px; display: block; background: currentColor; opacity: .7; }
+    .circle { border-radius: 50%; }
+    .triangle { clip-path: polygon(50% 0%, 100% 100%, 0% 100%); }
+    .square { border-radius: 4px; }
+    .color-btn { width: 38px; height: 38px; border-radius: 50%; padding: 0; }
+    .color-btn span { display: block; width: 100%; height: 100%; border-radius: 50%; }
+    #launchPanel { margin-top: auto; padding: 18px; border-radius: 24px; background: var(--panel); border: 1px solid var(--panel-border); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 16px 42px rgba(67,80,86,.08); }
+    #launchPreview { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    #previewText { font-size: 13px; line-height: 1.5; color: #66747A; }
+    #previewShape { width: 52px; height: 52px; flex: 0 0 auto; background: #F3C8D8; opacity: .6; box-shadow: 0 0 0 1px rgba(255,255,255,.35) inset, 0 8px 20px rgba(80,90,95,.10); }
+    #sensorBtn, #continueBtn, #restartBtn { margin-top: 14px; width: 100%; min-height: 50px; border: 0; border-radius: 16px; background: rgba(77,92,98,.92); color: #fff; letter-spacing: .03em; }
+    #continueBtn:disabled { opacity: .42; }
+    #hint { margin-top: 12px; font-size: 12px; line-height: 1.6; color: #7C888D; text-align: center; }
+
+    #space { touch-action: none; }
+    #spaceUI { position: absolute; inset: 0; pointer-events: none; }
+    #titleMini { position: absolute; left: 18px; top: max(18px, env(safe-area-inset-top)); font-family: Georgia, serif; font-size: 20px; color: rgba(73,87,93,.72); }
+    #modeHint { position: absolute; left: 18px; right: 18px; bottom: max(22px, env(safe-area-inset-bottom)); text-align: center; padding: 11px 14px; border-radius: 999px; background: rgba(255,255,255,.48); border: 1px solid rgba(255,255,255,.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); color: rgba(78,92,98,.74); font-size: 12px; transition: opacity .8s ease; }
+    #modeHint.hidden { opacity: 0; }
+    #resetButton { position: absolute; right: 16px; top: max(16px, env(safe-area-inset-top)); border: 0; border-radius: 999px; padding: 8px 12px; background: rgba(255,255,255,.36); color: rgba(82,94,100,.65); pointer-events: auto; font-size: 11px; }
+    #count { position: absolute; right: 18px; bottom: max(72px, calc(env(safe-area-inset-bottom) + 62px)); font-size: 11px; letter-spacing: .08em; color: rgba(83,96,102,.5); }
+
+    #permissionOverlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(238,241,242,.62); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); z-index: 20; }
+    #permissionCard { width: min(92vw, 420px); padding: 24px; border-radius: 24px; background: rgba(255,255,255,.77); border: 1px solid rgba(255,255,255,.88); box-shadow: 0 24px 60px rgba(66,78,84,.12); text-align: center; }
+    #permissionCard h2 { margin: 0 0 8px; font-family: Georgia, serif; font-weight: 500; font-size: 28px; color: #4D5B61; }
+    #permissionCard p { margin: 0; color: #748087; line-height: 1.7; font-size: 13px; }
+    #permissionCard button { margin-top: 18px; width: 100%; min-height: 50px; border: 0; border-radius: 16px; background: #536168; color: #fff; }
+
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+  </style>
+</head>
+<body>
+<div id="app">
+  <section id="setup" class="screen active">
+    <div class="eyebrow">NFC Interactive Instrument</div>
+    <h1>Colorful Noise</h1>
+    <p class="desc">ひとつの形と色を選んで、静かな空間へ投げ込んでください。形どうしが出会うと、それぞれの音が鳴ります。</p>
+
+    <div class="section">
+      <div class="section-label">SHAPE</div>
+      <div class="shape-row">
+        <button class="shape-btn selected" data-shape="circle" aria-label="円"><span class="shape-glyph circle"></span></button>
+        <button class="shape-btn" data-shape="triangle" aria-label="三角形"><span class="shape-glyph triangle"></span></button>
+        <button class="shape-btn" data-shape="square" aria-label="四角形"><span class="shape-glyph square"></span></button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">COLOR</div>
+      <div class="color-row">
+        <button class="color-btn selected" data-color="#F3C8D8" aria-label="淡いピンク"><span style="background:#F3C8D8"></span></button>
+        <button class="color-btn" data-color="#F1E3A4" aria-label="淡い黄色"><span style="background:#F1E3A4"></span></button>
+        <button class="color-btn" data-color="#BFDFF0" aria-label="淡い水色"><span style="background:#BFDFF0"></span></button>
+        <button class="color-btn" data-color="#D9CBEF" aria-label="薄紫"><span style="background:#D9CBEF"></span></button>
+        <button class="color-btn" data-color="#F5F5F2" aria-label="白"><span style="background:#F5F5F2"></span></button>
+        <button class="color-btn" data-color="#D6D8DD" aria-label="淡いグレー"><span style="background:#D6D8DD"></span></button>
+        <button class="color-btn" data-color="#C9E8E4" aria-label="薄い青"><span style="background:#C9E8E4"></span></button>
+      </div>
+    </div>
+
+    <div id="launchPanel">
+      <div id="launchPreview">
+        <div>
+          <div class="section-label">YOUR OBJECT</div>
+          <div id="previewText">円 / 淡いピンク</div>
+        </div>
+        <div id="previewShape" class="circle"></div>
+      </div>
+      <button id="sensorBtn">スマホを傾けて演奏する</button>
+      <button id="continueBtn" disabled>投げ込む準備をする</button>
+      <div id="hint">センサーを許可すると、傾きで重力を動かせます。振るとオブジェクトが少し弾みます。</div>
+    </div>
+  </section>
+
+  <section id="space" class="screen">
+    <canvas id="world"></canvas>
+    <div id="spaceUI">
+      <div id="titleMini">Colorful Noise</div>
+      <button id="resetButton">RESET</button>
+      <div id="count">0 / 1 OBJECT · 3 sound guides</div>
+      <div id="modeHint">画面下から上へスワイプして、オブジェクトを投げ込む</div>
+    </div>
+  </section>
+
+  <div id="permissionOverlay" hidden>
+    <div id="permissionCard">
+      <h2>Movement</h2>
+      <p>スマートフォンの傾きと動きを作品に使います。センサーへのアクセスを許可してください。</p>
+      <button id="grantPermission">センサーを許可する</button><button id="skipPermission" style="margin-top:10px;background:transparent;color:#68767C;border:0;min-height:42px;">センサーなしで続ける</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"></script>
+<script>
+(() => {
+  const { Engine, World, Bodies, Body, Events, Vector } = Matter;
+  const STORAGE_KEY = 'colorful-noise-single-object-v1';
+
+  const setup = document.getElementById('setup');
+  const space = document.getElementById('space');
+  const canvas = document.getElementById('world');
+  const ctx = canvas.getContext('2d');
+  const sensorBtn = document.getElementById('sensorBtn');
+  const continueBtn = document.getElementById('continueBtn');
+  const permissionOverlay = document.getElementById('permissionOverlay');
+  const grantPermission = document.getElementById('grantPermission');
+  const skipPermission = document.getElementById('skipPermission');
+  const previewText = document.getElementById('previewText');
+  const previewShape = document.getElementById('previewShape');
+  const modeHint = document.getElementById('modeHint');
+  const count = document.getElementById('count');
+  const resetButton = document.getElementById('resetButton');
+
+  const SHAPE_LABELS = { circle: '円', triangle: '三角形', square: '四角形' };
+  const COLORS = ['#F3C8D8','#F1E3A4','#BFDFF0','#D9CBEF','#F5F5F2','#D6D8DD','#C9E8E4'];
+  const SOUND = { circle: 392.00, triangle: 523.25, square: 659.25 };
+
+  let selectedShape = 'circle';
+  let selectedColor = COLORS[0];
+  let sensorEnabled = false;
+  let audioCtx = null;
+  let swipeStart = null;
+  let objectBody = null;
+  let demoBodies = [];
+  let worldWidth = 0;
+  let worldHeight = 0;
+  let lastShakeAt = 0;
+  let lastCollisionAt = 0;
+  let gravityX = 0;
+  let gravityY = 1;
+
+  const engine = Engine.create({ enableSleeping: false });
+  engine.gravity.scale = 0.0011;
+  engine.timing.timeScale = 1;
+
+  function getSavedObject() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
+
+  function hasSavedObject() {
+    return !!getSavedObject();
+  }
+
+  function saveObject() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ shape: selectedShape, color: selectedColor }));
+    } catch {}
+  }
+
+  function resetObject() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    if (objectBody) {
+      World.remove(engine.world, objectBody);
+      objectBody = null;
+    }
+    demoBodies.forEach(b => World.remove(engine.world, b));
+    demoBodies = [];
+    count.textContent = '0 / 1 OBJECT · 3 sound guides';
+    showSetup();
+  }
+
+  function updatePreview() {
+    previewText.textContent = `${SHAPE_LABELS[selectedShape]} / ${colorName(selectedColor)}`;
+    previewShape.className = `shape-glyph ${selectedShape}`;
+    previewShape.style.background = selectedColor;
+  }
+
+  function colorName(hex) {
+    const map = {
+      '#F3C8D8':'淡いピンク','#F1E3A4':'淡い黄色','#BFDFF0':'淡い水色','#D9CBEF':'薄紫','#F5F5F2':'白','#D6D8DD':'淡いグレー','#C9E8E4':'薄い青'
+    };
+    return map[hex] || hex;
+  }
+
+  document.querySelectorAll('.shape-btn').forEach(btn => btn.addEventListener('click', () => {
+    selectedShape = btn.dataset.shape;
+    document.querySelectorAll('.shape-btn').forEach(x => x.classList.toggle('selected', x === btn));
+    updatePreview();
+  }));
+
+  document.querySelectorAll('.color-btn').forEach(btn => btn.addEventListener('click', () => {
+    selectedColor = btn.dataset.color;
+    document.querySelectorAll('.color-btn').forEach(x => x.classList.toggle('selected', x === btn));
+    updatePreview();
+  }));
+
+  function setupAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function playTone(shape, velocity = 1) {
+    setupAudio();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+    const now = audioCtx.currentTime;
+    const base = SOUND[shape] || 440;
+    const pitch = base * (0.94 + Math.min(0.35, velocity * 0.55));
+    osc.type = shape === 'circle' ? 'sine' : shape === 'triangle' ? 'triangle' : 'square';
+    osc.frequency.setValueAtTime(pitch, now);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(shape === 'square' ? 1400 : 2600, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.12, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.36);
+    osc.connect(filter).connect(gain).connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.38);
+  }
+
+  async function enableSensors() {
+    setupAudio();
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+      permissionOverlay.hidden = false;
+      return;
+    }
+    startSensorListeners();
+  }
+
+  async function grantSensors() {
+    try {
+      const permissions = [];
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        permissions.push(DeviceMotionEvent.requestPermission());
+      }
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        permissions.push(DeviceOrientationEvent.requestPermission());
+      }
+      const result = await Promise.all(permissions);
+      if (result.some(v => v === 'denied')) throw new Error('denied');
+      permissionOverlay.hidden = true;
+      startSensorListeners();
+    } catch (err) {
+      permissionOverlay.hidden = false;
+      document.querySelector('#permissionCard p').textContent = 'センサーを許可できませんでした。センサーなしでも基本操作を試せます。';
+      continueBtn.disabled = false;
+      continueBtn.textContent = 'センサーなしで続ける';
+    }
+  }
+
+  function startSensorListeners() {
+    if (sensorEnabled) return;
+    sensorEnabled = true;
+    window.addEventListener('deviceorientation', handleOrientation, { passive: true });
+    window.addEventListener('devicemotion', handleMotion, { passive: true });
+    sensorBtn.textContent = 'センサー有効 ✓';
+    sensorBtn.style.opacity = '.62';
+    continueBtn.disabled = false;
+  }
+
+  function handleOrientation(event) {
+    if (!sensorEnabled) return;
+    let gamma = Number.isFinite(event.gamma) ? event.gamma : 0;
+    let beta = Number.isFinite(event.beta) ? event.beta : 0;
+    gamma = Math.max(-45, Math.min(45, gamma));
+    beta = Math.max(-45, Math.min(45, beta));
+    gravityX = gamma / 45;
+    gravityY = 1 + beta / 100;
+    gravityX = Math.max(-1.2, Math.min(1.2, gravityX));
+    gravityY = Math.max(0.15, Math.min(1.7, gravityY));
+  }
+
+  function handleMotion(event) {
+    const a = event.accelerationIncludingGravity;
+    if (!a) return;
+    const x = a.x || 0, y = a.y || 0, z = a.z || 0;
+    const magnitude = Math.sqrt(x*x + y*y + z*z);
+    const now = performance.now();
+    if (magnitude > 23 && now - lastShakeAt > 650) {
+      lastShakeAt = now;
+      const direction = Vector.normalise({ x: x || (Math.random()-.5), y: y || -1 });
+      [...demoBodies, ...(objectBody ? [objectBody] : [])].forEach(body => {
+        Body.applyForce(body, body.position, { x: direction.x * 0.008, y: direction.y * 0.008 });
+      });
+    }
+  }
+
+  sensorBtn.addEventListener('click', enableSensors);
+  grantPermission.addEventListener('click', grantSensors);
+  skipPermission.addEventListener('click', () => { permissionOverlay.hidden = true; continueBtn.disabled = false; continueBtn.textContent = '投げ込む準備をする'; });
+
+  continueBtn.addEventListener('click', () => {
+    setupAudio();
+    showSpace();
+  });
+
+  resetButton.addEventListener('click', resetObject);
+
+  function showSetup() {
+    setup.classList.add('active');
+    space.classList.remove('active');
+    if (hasSavedObject()) {
+      continueBtn.disabled = false;
+      continueBtn.textContent = '作品を見る';
+      document.querySelector('#hint').textContent = 'このスマートフォンでは、すでに1個投げ込んでいます。';
+    } else {
+      continueBtn.disabled = !sensorEnabled;
+      continueBtn.textContent = '投げ込む準備をする';
+      document.querySelector('#hint').textContent = 'センサーを許可すると、傾きで重力を動かせます。振るとオブジェクトが少し弾みます。';
+    }
+    updatePreview();
+  }
+
+  function showSpace() {
+    setup.classList.remove('active');
+    space.classList.add('active');
+    resizeCanvas();
+    if (demoBodies.length === 0) createDemoBodies();
+    if (hasSavedObject()) {
+      restoreSavedObject();
+    } else {
+      modeHint.textContent = '画面下から上へスワイプして、オブジェクトを投げ込む';
+      setTimeout(() => modeHint.classList.add('hidden'), 5500);
+    }
+    startLoop();
+  }
+
+  function resizeCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    worldWidth = window.innerWidth;
+    worldHeight = window.innerHeight;
+    canvas.width = Math.floor(worldWidth * dpr);
+    canvas.height = Math.floor(worldHeight * dpr);
+    canvas.style.width = worldWidth + 'px';
+    canvas.style.height = worldHeight + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    rebuildWalls();
+  }
+
+  let walls = [];
+  function rebuildWalls() {
+    walls.forEach(w => World.remove(engine.world, w));
+    const thickness = 80;
+    walls = [
+      Bodies.rectangle(worldWidth/2, worldHeight + thickness/2, worldWidth + 200, thickness, { isStatic: true }),
+      Bodies.rectangle(-thickness/2, worldHeight/2, thickness, worldHeight + 200, { isStatic: true }),
+      Bodies.rectangle(worldWidth + thickness/2, worldHeight/2, thickness, worldHeight + 200, { isStatic: true }),
+      Bodies.rectangle(worldWidth/2, -thickness/2, worldWidth + 200, thickness, { isStatic: true })
+    ];
+    World.add(engine.world, walls);
+  }
+
+  function makeBody(shape, x, y) {
+    const size = Math.min(worldWidth, worldHeight) * 0.12;
+    const options = {
+      restitution: 0.72,
+      friction: 0.012,
+      frictionAir: 0.006,
+      density: 0.0018,
+      label: `object:${shape}`,
+      render: { visible: false }
+    };
+    if (shape === 'circle') return Bodies.circle(x, y, size * .48, options);
+    if (shape === 'triangle') return Bodies.polygon(x, y, 3, size * .55, { ...options, chamfer: { radius: 2 } });
+    return Bodies.rectangle(x, y, size * .88, size * .88, { ...options, chamfer: { radius: 8 } });
+  }
+
+  function createDemoBodies() {
+    demoBodies.forEach(b => World.remove(engine.world, b));
+    demoBodies = [];
+    const presets = [
+      ['circle', '#D9E8EA', worldWidth * .22, worldHeight * .34],
+      ['triangle', '#E4DDF0', worldWidth * .70, worldHeight * .27],
+      ['square', '#F0E7C4', worldWidth * .62, worldHeight * .52]
+    ];
+    presets.forEach(([shape, color, x, y]) => {
+      const b = makeBody(shape, x, y);
+      b.plugin = { color, shape, demo: true };
+      b.isDemo = true;
+      Body.setVelocity(b, { x: (Math.random()-.5)*1.2, y: (Math.random()-.5)*1.2 });
+      Body.setAngularVelocity(b, (Math.random()-.5)*.035);
+      demoBodies.push(b);
+    });
+    World.add(engine.world, demoBodies);
+  }
+
+  function launchObject(dx, dy) {
+    if (hasSavedObject() || objectBody) {
+      showSpace();
+      return;
+    }
+    const x = worldWidth / 2;
+    const y = worldHeight - Math.max(95, worldHeight * 0.12);
+    objectBody = makeBody(selectedShape, x, y);
+    objectBody.plugin = { color: selectedColor, shape: selectedShape, participant: true };
+    World.add(engine.world, objectBody);
+    const direction = Vector.normalise({ x: dx, y: dy });
+    Body.setVelocity(objectBody, { x: direction.x * 8.3, y: direction.y * 8.3 });
+    Body.setAngularVelocity(objectBody, (Math.random() - .5) * .12);
+    saveObject();
+    count.textContent = '1 / 1 OBJECT · 3 sound guides';
+    modeHint.textContent = 'スマホを傾けたり、軽く振ったりして演奏する';
+    setTimeout(() => modeHint.classList.add('hidden'), 4200);
+  }
+
+  function restoreSavedObject() {
+    if (objectBody) return;
+    const saved = getSavedObject();
+    if (!saved) return;
+    selectedShape = saved.shape || 'circle';
+    selectedColor = saved.color || COLORS[0];
+    document.querySelectorAll('.shape-btn').forEach(btn => btn.classList.toggle('selected', btn.dataset.shape === selectedShape));
+    document.querySelectorAll('.color-btn').forEach(btn => btn.classList.toggle('selected', btn.dataset.color === selectedColor));
+    updatePreview();
+    objectBody = makeBody(selectedShape, worldWidth/2, worldHeight*0.45);
+    objectBody.plugin = { color: selectedColor, shape: selectedShape, participant: true };
+    World.add(engine.world, objectBody);
+    count.textContent = '1 / 1 OBJECT · 3 sound guides';
+  }
+
+  function onPointerDown(e) {
+    if (!space.classList.contains('active') || hasSavedObject() && objectBody) return;
+    swipeStart = { x: e.clientX, y: e.clientY, t: performance.now() };
+  }
+
+  function onPointerUp(e) {
+    if (!swipeStart || objectBody) { swipeStart = null; return; }
+    const dx = e.clientX - swipeStart.x;
+    const dy = e.clientY - swipeStart.y;
+    const startY = swipeStart.y;
+    swipeStart = null;
+    if (startY < worldHeight * 0.55) return;
+    if (dy > -45) return;
+    if (Math.hypot(dx, dy) < 60) return;
+    launchObject(dx, dy);
+  }
+
+  canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
+  canvas.addEventListener('pointerup', onPointerUp, { passive: true });
+  canvas.addEventListener('pointercancel', () => swipeStart = null, { passive: true });
+
+  function drawGlass(body) {
+    const p = body.position;
+    const angle = body.angle;
+    const s = body.plugin?.color || '#F3C8D8';
+    const shape = body.plugin?.shape || 'circle';
+    const size = Math.min(worldWidth, worldHeight) * 0.12;
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(angle);
+    ctx.globalAlpha = .58;
+    ctx.shadowColor = 'rgba(105,118,124,.14)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 8;
+
+    if (shape === 'circle') {
+      ctx.beginPath();
+      ctx.arc(0, 0, size * .48, 0, Math.PI*2);
+      ctx.fillStyle = s;
+      ctx.fill();
+    } else if (shape === 'triangle') {
+      ctx.beginPath();
+      const r = size * .58;
+      for (let i=0;i<3;i++) {
+        const a = -Math.PI/2 + i * (Math.PI*2/3);
+        const x = Math.cos(a)*r, y = Math.sin(a)*r;
+        if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = s;
+      ctx.fill();
+    } else {
+      const w = size*.9;
+      ctx.beginPath();
+      ctx.roundRect(-w/2,-w/2,w,w,9);
+      ctx.fillStyle = s;
+      ctx.fill();
+    }
+
+    ctx.shadowColor = 'transparent';
+    ctx.globalAlpha = .2;
+    if (shape === 'circle') {
+      ctx.beginPath(); ctx.arc(-size*.1, -size*.13, size*.22, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.arc(-size*.16, -size*.18, size*.11, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawBackground() {
+    ctx.clearRect(0,0,worldWidth,worldHeight);
+    const g = ctx.createRadialGradient(worldWidth*.5, worldHeight*.38, 20, worldWidth*.5, worldHeight*.5, Math.max(worldWidth,worldHeight)*.7);
+    g.addColorStop(0, 'rgba(255,255,255,.38)');
+    g.addColorStop(1, 'rgba(224,231,234,.12)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,worldWidth,worldHeight);
+  }
+
+  Events.on(engine, 'collisionStart', event => {
+    const now = performance.now();
+    if (now - lastCollisionAt < 45) return;
+    for (const pair of event.pairs) {
+      const a = pair.bodyA, b = pair.bodyB;
+      if (!a.plugin?.shape || !b.plugin?.shape) continue;
+      if (a.plugin.demo && b.plugin.demo) continue;
+      const speed = a.velocity.x*a.velocity.x + a.velocity.y*a.velocity.y + b.velocity.x*b.velocity.x + b.velocity.y*b.velocity.y;
+      if (speed < 0.4) continue;
+      lastCollisionAt = now;
+      const soundingShape = a.plugin.demo && !b.plugin.demo ? b.plugin.shape : a.plugin.demo && b.plugin.demo ? a.plugin.shape : a.plugin.shape;
+      playTone(soundingShape, Math.min(1, Math.sqrt(speed)/10));
+      break;
+    }
+  });
+
+  let loopStarted = false;
+  function startLoop() {
+    if (loopStarted) return;
+    loopStarted = true;
+    let last = performance.now();
+    function frame(t) {
+      const dt = Math.min(32, t-last); last=t;
+      engine.gravity.x += (gravityX - engine.gravity.x) * 0.08;
+      engine.gravity.y += (gravityY - engine.gravity.y) * 0.08;
+      Engine.update(engine, dt);
+      drawBackground();
+      demoBodies.forEach(drawGlass);
+      if (objectBody) drawGlass(objectBody);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  window.addEventListener('resize', () => { if (space.classList.contains('active')) resizeCanvas(); });
+
+  updatePreview();
+  if (hasSavedObject()) {
+    continueBtn.disabled = false;
+    continueBtn.textContent = '作品を見る';
+  }
+})();
+</script>
+</body>
+</html>
